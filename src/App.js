@@ -43,6 +43,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [allSubmissions, setAllSubmissions] = useState([]);
+  const [exporting, setExporting] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -54,6 +55,76 @@ function App() {
       setAllSubmissions(data);
     } catch (error) {
       console.error('Error loading submissions:', error);
+    }
+  };
+
+  // Export data as CSV
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch(`${API_URL}/export/csv`);
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      
+      // Get the CSV content
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `warehouse_hours_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setMessage({ type: 'success', text: 'Data exported successfully!' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      setMessage({ type: 'error', text: 'Failed to export data' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export data as JSON
+  const handleExportJSON = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch(`${API_URL}/export/json`);
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      
+      // Get the JSON content
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `warehouse_hours_export_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setMessage({ type: 'success', text: 'Data exported successfully!' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      setMessage({ type: 'error', text: 'Failed to export data' });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -219,10 +290,26 @@ function App() {
       <div className="container">
         <header className="header">
           <h1>Warehouse Hours Submission</h1>
-          <p className="subtitle">KG/Hour Warehouse KPI Tracking</p>
-          <button onClick={toggleLog} className="log-toggle-button">
-            {showLog ? 'Hide Submission Log' : 'View Submission Log'}
-          </button>
+          <p className="subtitle">Pet Food Manufacturing - KPI Tracking</p>
+          <div className="header-buttons">
+            <button onClick={toggleLog} className="log-toggle-button">
+              {showLog ? 'Hide Submission Log' : 'View Submission Log'}
+            </button>
+            <button 
+              onClick={handleExportCSV} 
+              className="export-button"
+              disabled={exporting}
+            >
+              {exporting ? 'Exporting...' : '📥 Export CSV'}
+            </button>
+            <button 
+              onClick={handleExportJSON} 
+              className="export-button export-json"
+              disabled={exporting}
+            >
+              {exporting ? 'Exporting...' : '📥 Export JSON'}
+            </button>
+          </div>
         </header>
 
         {showLog && (
@@ -371,6 +458,7 @@ function App() {
             <li>Enter the total warehouse hours worked</li>
             <li>Click Submit to save your data</li>
             <li>To edit: Click "View Submission Log" and click Edit on any entry</li>
+            <li>To export all data: Click the "Export CSV" or "Export JSON" buttons</li>
             <li>Once submitted, that division is locked for this session (refresh to unlock)</li>
           </ul>
         </div>
