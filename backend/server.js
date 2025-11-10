@@ -9,6 +9,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Debug: Log environment variables (without showing passwords)
+console.log('=== Environment Variables Check ===');
+console.log('DB_HOST:', process.env.DB_HOST ? 'SET' : 'NOT SET');
+console.log('DB_PORT:', process.env.DB_PORT ? 'SET' : 'NOT SET');
+console.log('DB_USER:', process.env.DB_USER ? 'SET' : 'NOT SET');
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? 'SET (hidden)' : 'NOT SET');
+console.log('DB_NAME:', process.env.DB_NAME ? 'SET' : 'NOT SET');
+console.log('DB_SSL:', process.env.DB_SSL);
+console.log('PORT:', PORT);
+console.log('===================================');
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
@@ -20,7 +31,7 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
+    port: parseInt(process.env.DB_PORT) || 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -32,12 +43,58 @@ const pool = mysql.createPool({
 // Test database connection
 pool.getConnection()
     .then(connection => {
-        console.log('Database connected successfully');
+        console.log('✅ Database connected successfully');
         connection.release();
     })
     .catch(err => {
-        console.error('Database connection failed:', err);
+        console.error('❌ Database connection failed:', err.message);
+        console.error('Connection attempted to:', {
+            host: process.env.DB_HOST || 'NOT SET',
+            port: process.env.DB_PORT || 'NOT SET',
+            database: process.env.DB_NAME || 'NOT SET',
+            user: process.env.DB_USER || 'NOT SET'
+        });
     });
+
+// Helper function to convert rows to CSV
+function convertToCSV(rows) {
+    if (rows.length === 0) return '';
+    
+    // Get headers
+    const headers = Object.keys(rows[0]);
+    
+    // Create CSV header row
+    const csvHeaders = headers.join(',');
+    
+    // Create CSV data rows
+    const csvRows = rows.map(row => {
+        return headers.map(header => {
+            let value = row[header];
+            
+            // Handle null/undefined
+            if (value === null || value === undefined) {
+                return '';
+            }
+            
+            // Handle dates
+            if (value instanceof Date) {
+                value = value.toISOString();
+            }
+            
+            // Convert to string and escape quotes
+            value = String(value).replace(/"/g, '""');
+            
+            // Wrap in quotes if contains comma, newline, or quote
+            if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+                value = `"${value}"`;
+            }
+            
+            return value;
+        }).join(',');
+    });
+    
+    return [csvHeaders, ...csvRows].join('\n');
+}
 
 // API Routes
 
@@ -51,6 +108,50 @@ app.get('/api/submissions', async (req, res) => {
     } catch (error) {
         console.error('Error fetching submissions:', error);
         res.status(500).json({ error: 'Failed to fetch submissions' });
+    }
+});
+
+// Export all submissions as CSV
+app.get('/api/export/csv', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT id, division, submission_month, submission_year, warehouse_hours, created_at, updated_at FROM warehouse_submissions ORDER BY created_at DESC'
+        );
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'No data to export' });
+        }
+        
+        const csv = convertToCSV(rows);
+        
+        // Set headers to trigger download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=warehouse_hours_export_${Date.now()}.csv`);
+        res.send(csv);
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        res.status(500).json({ error: 'Failed to export data' });
+    }
+});
+
+// Export all submissions as JSON
+app.get('/api/export/json', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT * FROM warehouse_submissions ORDER BY created_at DESC'
+        );
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'No data to export' });
+        }
+        
+        // Set headers to trigger download
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=warehouse_hours_export_${Date.now()}.json`);
+        res.json(rows);
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        res.status(500).json({ error: 'Failed to export data' });
     }
 });
 
