@@ -219,7 +219,7 @@ function App() {
       <div className="container">
         <header className="header">
           <h1>Warehouse Hours Submission</h1>
-          <p className="subtitle">Pet Food Manufacturing - KPI Tracking</p>
+          <p className="subtitle">KG/Hour Warehouse KPI Tracking</p>
           <button onClick={toggleLog} className="log-toggle-button">
             {showLog ? 'Hide Submission Log' : 'View Submission Log'}
           </button>
