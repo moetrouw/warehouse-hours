@@ -44,6 +44,7 @@ function App() {
   const [showLog, setShowLog] = useState(false);
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -68,10 +69,7 @@ function App() {
         throw new Error('Export failed');
       }
       
-      // Get the CSV content
       const blob = await response.blob();
-      
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -79,7 +77,6 @@ function App() {
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
@@ -93,38 +90,31 @@ function App() {
     }
   };
 
-  // Export data as JSON
-  const handleExportJSON = async () => {
-    setExporting(true);
+  // Delete submission
+  const handleDelete = async (id, division) => {
+    if (!window.confirm(`Are you sure you want to delete the submission for Division ${division}?`)) {
+      return;
+    }
+
+    setDeleting(id);
     try {
-      const response = await fetch(`${API_URL}/export/json`);
-      
-      if (!response.ok) {
-        throw new Error('Export failed');
+      const response = await fetch(`${API_URL}/submissions/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Submission deleted successfully!' });
+        loadAllSubmissions();
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      } else {
+        const data = await response.json();
+        setMessage({ type: 'error', text: data.error || 'Failed to delete submission' });
       }
-      
-      // Get the JSON content
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `warehouse_hours_export_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      setMessage({ type: 'success', text: 'Data exported successfully!' });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
-      console.error('Error exporting data:', error);
-      setMessage({ type: 'error', text: 'Failed to export data' });
+      console.error('Error deleting submission:', error);
+      setMessage({ type: 'error', text: 'An error occurred while deleting' });
     } finally {
-      setExporting(false);
+      setDeleting(null);
     }
   };
 
@@ -236,7 +226,6 @@ function App() {
           setSubmittedDivisions(prev => new Set([...prev, formData.division]));
         }
 
-        // Reload submissions log if it's open
         if (showLog) {
           loadAllSubmissions();
         }
@@ -290,7 +279,7 @@ function App() {
       <div className="container">
         <header className="header">
           <h1>Warehouse Hours Submission</h1>
-          <p className="subtitle">Pet Food Manufacturing - KPI Tracking</p>
+          <p className="subtitle">KG/Hour Warehouse KPI Tracking</p>
           <div className="header-buttons">
             <button onClick={toggleLog} className="log-toggle-button">
               {showLog ? 'Hide Submission Log' : 'View Submission Log'}
@@ -301,13 +290,6 @@ function App() {
               disabled={exporting}
             >
               {exporting ? 'Exporting...' : '📥 Export CSV'}
-            </button>
-            <button 
-              onClick={handleExportJSON} 
-              className="export-button export-json"
-              disabled={exporting}
-            >
-              {exporting ? 'Exporting...' : '📥 Export JSON'}
             </button>
           </div>
         </header>
@@ -327,7 +309,7 @@ function App() {
                       <th>Year</th>
                       <th>Hours</th>
                       <th>Submitted</th>
-                      <th>Action</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -344,6 +326,13 @@ function App() {
                             className="edit-button"
                           >
                             Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(submission.id, submission.division)}
+                            className="delete-button"
+                            disabled={deleting === submission.id}
+                          >
+                            {deleting === submission.id ? 'Deleting...' : 'Delete'}
                           </button>
                         </td>
                       </tr>
@@ -457,8 +446,8 @@ function App() {
             <li>Choose the submission month and year</li>
             <li>Enter the total warehouse hours worked</li>
             <li>Click Submit to save your data</li>
-            <li>To edit: Click "View Submission Log" and click Edit on any entry</li>
-            <li>To export all data: Click the "Export CSV" or "Export JSON" buttons</li>
+            <li>To edit or delete: Click "View Submission Log" to see all entries</li>
+            <li>To export all data: Click the "Export CSV" button above</li>
             <li>Once submitted, that division is locked for this session (refresh to unlock)</li>
           </ul>
         </div>
